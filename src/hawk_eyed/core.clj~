@@ -1,0 +1,90 @@
+(ns neural-network.core
+  (:gen-class))
+
+
+(use '(incanter core stats))
+
+
+(definterface INetwork
+  (feedforward [a])
+  (SGD [training-data epochs mini-batch-size eta test-data])
+  (update_mini_batch [mini-batch eta])
+  (backprop [x y]))
+  
+
+(defrecord Network [num-layers 
+                    sizes 
+                    biases 
+                    weights]
+  INetwork
+  (feedforward [this a]
+    (loop [b biases
+           w weights
+           c (- num-layers 1)
+           result a]
+      (if (zero? c)
+        result
+        (recur (rest biases)
+               (rest weights)
+               (dec c)
+               (plus (mmult (first w) result) (first b))))))
+  (SGD [this training-data epochs mini-batch-size eta test-data]
+    (when-not (empty? test-data)
+      (let [n-test (count test-data)
+            n (count training-data)]
+        (for [j (range epochs)]
+          (let [shuffled-training-data (shuffle training-data)]
+            (let [mini-batches (for [k (range 0 n mini-batch-size)] 
+                                 (take mini-batch-size (drop k training-data)))]
+              (dorun (for [mini-batch mini-batches] 
+                       (.update_mini_batch mini-batch eta))
+                     (if-not (empty? test-data)
+                       (println "Epoch " j ": " "self.evaluate(test_data)" n-test)
+                       (println "Epoch " j "complete"))
+                     ;(print mini-batches)
+)))))))
+  (update_mini_batch [this mini-batch eta]
+    (let [nabla-b (for [b biases] (matrix 0 (nrow b) (ncol b)))
+          nabla-w (for [w weights] (matrix 0 (nrow w) (ncol w)))]
+      ;from here
+      [nabla-b nabla-w]))
+  (backprop [this x y]
+    (+ x y))
+)
+
+
+
+
+(defn init-network [sizes]
+  (let [num-layers (count sizes)
+        biases (vec (for [y (rest sizes)] 
+                      (if (= y 1)
+                        (matrix [[(sample-normal y :mean 0 :sd 1)]])
+                        (matrix (vec (for [bias (sample-normal y :mean 0 :sd 1)] [bias]))))))
+        weights (loop [from (butlast sizes)
+                       to (rest sizes)
+                       c (- (count sizes) 1)
+                       result []]
+                  (if (zero? c)
+                    result
+                    (recur (rest from)
+                           (rest to)
+                           (dec c)
+                           (conj result (matrix (vec (sample-normal (* (first from) (first to)))) (first from))))))]
+      (Network. num-layers sizes biases weights)))
+
+
+(defn sigmoid [z]
+  (/ 1 (+ 1 (Math/exp (- z)))))
+
+
+(defn sigmoid_vec [z]
+  (matrix (conj [](sigmoid z))))
+
+
+(defn -main
+  "I don't do a whole lot ... yet."
+  [& args]
+  (def net (init-network [2 3 1]))
+  
+  )
